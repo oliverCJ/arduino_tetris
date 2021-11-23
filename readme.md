@@ -15,3 +15,5 @@
 2. 如果使用其他分辨率的LCD屏，可按需修改代码配置，最小要求320*240，过小则会导致显示不全
 2. 按钮连接后，需要修改代码tetris.h中对应的按钮针脚
 
+#### 效果
+![效果图](https://raw.githubusercontent.com/oliverCJ/arduino_tetris/master/show.jpeg)
