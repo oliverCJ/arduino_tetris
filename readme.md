@@ -14,3 +14,4 @@
 1. 如果是其他Arduino版本，需配置LCD屏，按要求连接针脚，可参考[LCD WIKI](http://www.lcdwiki.com/zh/%E9%A6%96%E9%A1%B5#SPI_Display_Module)
 2. 如果使用其他分辨率的LCD屏，可按需修改代码配置，最小要求320*240，过小则会导致显示不全
 2. 按钮连接后，需要修改代码tetris.h中对应的按钮针脚
+
