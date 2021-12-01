@@ -1,5 +1,11 @@
 #include "Free_Fonts.h"
 
+//#define USE_RF24 1 // 是否启用rf24进行控制。不需要则注释掉
+#define CE_PIN BCM22
+#define CSN_PIN BCM8
+#define JOYSTICK_ANGLOG_X_CENTER 512
+#define JOYSTICK_ANGLOG_Y_CENTER 500
+
 #define SCREEN_WIDTH 240 // 屏幕宽
 #define SCREEN_HIGHT 320 // 屏幕高  
 #define PIXEL_SIZE 15 // 像素块大小

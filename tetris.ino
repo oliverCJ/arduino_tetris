@@ -12,6 +12,16 @@
 #include <math.h>
 #include "tetris.h"
 
+#if defined(USE_RF24)
+    #include <nRF24L01.h>
+    #include <RF24.h>
+
+    RF24 radio(CE_PIN, CSN_PIN);
+    const byte address[6] = "00001";
+    char receiveData[20] = "";
+    int xAxis, yAxis;
+#endif
+
 TFT_eSPI tft = TFT_eSPI(); // 屏幕操作实例
 
 short level = 1; // 等级
@@ -25,6 +35,8 @@ int fallSpeed = FALING_SPEED; // 下落速度
 int moveReq = MOVE_FREQ; // 刷新速率
 int continueDownMoveReq = moveReq; // 持续按下刷新速率
 int continueDownCount = 0; // 持续按下计数
+
+byte buttonCatch = 0; // 0无操作 1上 2右 3下 4左 5旋转 6暂停/开始
 
 long lastButonPauseTime = millis(); // 最后暂停时间
 long lastButtonChangeTime = millis(); // 最后旋转时间
@@ -45,6 +57,13 @@ void setup(void) {
  * 游戏初始化前准备工作，只需要执行一次
  */
 void prepare() {
+    #if defined(USE_RF24)
+        radio.begin();
+        radio.openReadingPipe(1, address);
+        radio.setPALevel(RF24_PA_MIN);
+        radio.startListening();
+    #endif
+
     // 串口开启，便于调试和输出
     Serial.begin(9600);
     // 初始化按钮
@@ -151,8 +170,9 @@ void tipsGamePause() {
 void pauseGame() {
     while (true)
     {
+        readButton();
         // 按B键重新开始
-        if ((digitalRead(BUTTON_PAUSE) == LOW) && (millis() - lastButonPauseTime) >= 250)
+        if (buttonCatch == 6 && (millis() - lastButonPauseTime) >= 250)
         {
             lastButonPauseTime = millis();
             break;
@@ -166,7 +186,7 @@ void loop() {
     checkIsNeedGenerateNewShape(); // 检查是否需要重新产生方块
     calFalSpeed();  // 计算下落速度
     shapeFalling(); // 自动下落
-    readButton();   // 按键读取
+    catchButton();  // 按键读取
     printScore(); // 分数显示
     delay(50);
 }
@@ -228,22 +248,109 @@ void printScore() {
 }
 
 /**
+ * @brief 读取rf24 joystick
+ * 
+ */
+void readRF24Radio() {
+    #if defined(USE_RF24)
+    String msg;
+    if (radio.available()) {
+        radio.read(&receiveData, sizeof(receiveData));
+        msg = receiveData;
+        if (msg.startsWith("x-"))
+        {
+            xAxis = (msg.substring(2)).toInt();
+            if (xAxis < JOYSTICK_ANGLOG_X_CENTER) // LEFT
+            {
+                buttonCatch = 4;
+            }
+            else if (xAxis > JOYSTICK_ANGLOG_X_CENTER) // RIGHT
+            {
+                buttonCatch = 2;
+            } else
+            {
+                buttonCatch = 0;
+            }
+            
+        } else if (msg.startsWith("y-"))
+        {
+            yAxis = (msg.substring(2)).toInt();
+            if (yAxis < JOYSTICK_ANGLOG_Y_CENTER) // down
+            {
+                buttonCatch = 3;
+            }
+            else if (yAxis > JOYSTICK_ANGLOG_Y_CENTER) // up
+            {
+                buttonCatch = 1;
+            } else {
+                buttonCatch = 0;
+            }
+        } else if (msg == "A" || msg == "B" || msg == "C" || msg == "D")
+        {
+            buttonCatch = 5;
+        }
+        else if (msg == "start") // 暂停或开始
+        {
+            buttonCatch = 6;
+        }
+        else if (msg == "select") // 选择
+        {
+            /* code */
+        } 
+    }
+    #endif
+}
+
+void readButton()
+{
+    buttonCatch = 0;
+    #if defined(USE_RF24)
+    readRF24Radio();
+    #else
+    if (digitalRead(BUTTON_PAUSE) == LOW) {
+        buttonCatch = 6;
+    }
+    else if (digitalRead(BUTTON_CHANGE) == LOW || digitalRead(BUTTON_UP) == LOW)
+    {
+        buttonCatch = 5;
+    }
+    else if (digitalRead(BUTTON_DOWN) == HIGH)
+    {
+        buttonCatch = 0;
+    }
+    else if (digitalRead(BUTTON_DOWN) == LOW)
+    {
+        buttonCatch = 3;
+    }
+    else if (digitalRead(BUTTON_LEFT) == LOW)
+    {
+        buttonCatch = 4;
+    }
+    else if (digitalRead(BUTTON_RIGHT) == LOW)
+    {
+        buttonCatch = 2;
+    }
+    #endif
+}
+
+/**
  * 按钮读取，不同的按钮触发不同的效果
  */
-void readButton()
+void catchButton()
 {
     // 等掉落到游戏区域内才能开始进行按钮触发
     if (fallingShape.posY <= GAME_BOARD_LINE_WIDTH) {
         return;
     }
+    readButton();
     // 暂停按钮
-    if ((digitalRead(BUTTON_PAUSE) == LOW) && (millis() - lastButonPauseTime) >= 250)
+    if (buttonCatch == 6 && (millis() - lastButonPauseTime) >= 250)
     {
         lastButonPauseTime = millis();
         return tipsGamePause();
     }
     // 旋转按钮
-    if ((digitalRead(BUTTON_CHANGE) == LOW || digitalRead(BUTTON_UP) == LOW) && (millis() - lastButtonChangeTime) >= 250)
+    if (buttonCatch == 5 && (millis() - lastButtonChangeTime) >= 250)
     {
         eraseTetrisShape(fallingShape); // 擦除
         fallingShape.rotation = (fallingShape.rotation + 1) % fallingShape.sp.childLength; // 循环旋转
@@ -256,13 +363,13 @@ void readButton()
         
     }
     // 中断持续向下，恢复刷新速率为当前正常速率
-    if (digitalRead(BUTTON_DOWN) == HIGH)
+    if (buttonCatch == 0)
     {
         continueDownMoveReq = moveReq;
         continueDownCount = 0;
     }
     // 向下加速掉落
-    if (digitalRead(BUTTON_DOWN) == LOW && (millis() - lastButtonDownTime) >= continueDownMoveReq)
+    if (buttonCatch == 3 && (millis() - lastButtonDownTime) >= continueDownMoveReq)
     {
         if (isValidPosition(0, PIXEL_SIZE))
         {
@@ -280,7 +387,7 @@ void readButton()
         }
     }
     // 向左移动
-    else if (digitalRead(BUTTON_LEFT) == LOW && (millis() - lastButtonLeftTime) >= moveReq)
+    else if (buttonCatch == 4 && (millis() - lastButtonLeftTime) >= moveReq)
     {
         if (isValidPosition(-PIXEL_SIZE, 0))
         {
@@ -291,7 +398,7 @@ void readButton()
         }
     }
     // 向右移动
-    else if (digitalRead(BUTTON_RIGHT) == LOW && (millis() - lastButtonRightTime) >= moveReq)
+    else if (buttonCatch == 2 && (millis() - lastButtonRightTime) >= moveReq)
     {
         if (isValidPosition(PIXEL_SIZE, 0))
         {
