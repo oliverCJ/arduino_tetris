@@ -13,13 +13,15 @@
 #include "tetris.h"
 
 #if defined(USE_RF24)
-    #include <nRF24L01.h>
-    #include <RF24.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <RF24_config.h>
 
-    RF24 radio(CE_PIN, CSN_PIN);
-    const byte address[6] = "00001";
-    char receiveData[20] = "";
-    int xAxis, yAxis;
+RF24 radio(CE_PIN, CSN_PIN);
+const byte address[6] = "00001";
+char receiveData[20] = "";
+int xAxis, yAxis;
+String msgAnglogXCache, msgAnglogYCache, msgButtonCache;
 #endif
 
 TFT_eSPI tft = TFT_eSPI(); // 屏幕操作实例
@@ -57,12 +59,6 @@ void setup(void) {
  * 游戏初始化前准备工作，只需要执行一次
  */
 void prepare() {
-    #if defined(USE_RF24)
-        radio.begin();
-        radio.openReadingPipe(1, address);
-        radio.setPALevel(RF24_PA_MIN);
-        radio.startListening();
-    #endif
 
     // 串口开启，便于调试和输出
     Serial.begin(9600);
@@ -78,6 +74,14 @@ void prepare() {
     // 初始化屏幕
     tft.begin();
     tft.setRotation(2);
+
+#if defined(USE_RF24)
+    radio.begin();
+    radio.openReadingPipe(1, address);
+    radio.setPALevel(RF24_PA_MIN);
+    radio.startListening();
+    Serial.println("radio ready");
+#endif
 }
 
 /**
@@ -252,19 +256,20 @@ void printScore() {
  * 
  */
 void readRF24Radio() {
-    #if defined(USE_RF24)
     String msg;
     if (radio.available()) {
         radio.read(&receiveData, sizeof(receiveData));
         msg = receiveData;
+        // Serial.print("receive: === ");
+        // Serial.println(receiveData);
         if (msg.startsWith("x-"))
         {
             xAxis = (msg.substring(2)).toInt();
-            if (xAxis < JOYSTICK_ANGLOG_X_CENTER) // LEFT
+            if (xAxis < (JOYSTICK_ANGLOG_X_CENTER - JOYSTICK_ANGLOG_X_DEV)) // LEFT
             {
                 buttonCatch = 4;
             }
-            else if (xAxis > JOYSTICK_ANGLOG_X_CENTER) // RIGHT
+            else if (xAxis > JOYSTICK_ANGLOG_X_CENTER + JOYSTICK_ANGLOG_X_DEV) // RIGHT
             {
                 buttonCatch = 2;
             } else
@@ -275,11 +280,11 @@ void readRF24Radio() {
         } else if (msg.startsWith("y-"))
         {
             yAxis = (msg.substring(2)).toInt();
-            if (yAxis < JOYSTICK_ANGLOG_Y_CENTER) // down
+            if (yAxis < (JOYSTICK_ANGLOG_Y_CENTER - JOYSTICK_ANGLOG_Y_DEV)) // down
             {
                 buttonCatch = 3;
             }
-            else if (yAxis > JOYSTICK_ANGLOG_Y_CENTER) // up
+            else if (yAxis > (JOYSTICK_ANGLOG_Y_CENTER + JOYSTICK_ANGLOG_Y_DEV)) // up
             {
                 buttonCatch = 1;
             } else {
@@ -297,26 +302,27 @@ void readRF24Radio() {
         {
             /* code */
         } 
+    } else {
+        //Serial.println("rf24 not available");
     }
-    #endif
 }
 
 void readButton()
 {
     buttonCatch = 0;
-    #if defined(USE_RF24)
+#if defined(USE_RF24)
     readRF24Radio();
-    #else
+#else
     if (digitalRead(BUTTON_PAUSE) == LOW) {
         buttonCatch = 6;
     }
-    else if (digitalRead(BUTTON_CHANGE) == LOW || digitalRead(BUTTON_UP) == LOW)
+    else if (digitalRead(BUTTON_CHANGE) == LOW)
     {
         buttonCatch = 5;
     }
-    else if (digitalRead(BUTTON_DOWN) == HIGH)
+    else if (digitalRead(BUTTON_UP) == LOW)
     {
-        buttonCatch = 0;
+        buttonCatch = 1;
     }
     else if (digitalRead(BUTTON_DOWN) == LOW)
     {
@@ -329,8 +335,12 @@ void readButton()
     else if (digitalRead(BUTTON_RIGHT) == LOW)
     {
         buttonCatch = 2;
+    } else
+    {
+        buttonCatch = 0;
     }
-    #endif
+    
+#endif
 }
 
 /**
@@ -350,7 +360,7 @@ void catchButton()
         return tipsGamePause();
     }
     // 旋转按钮
-    if (buttonCatch == 5 && (millis() - lastButtonChangeTime) >= 250)
+    if ((buttonCatch == 5 || buttonCatch == 1) && (millis() - lastButtonChangeTime) >= 250)
     {
         eraseTetrisShape(fallingShape); // 擦除
         fallingShape.rotation = (fallingShape.rotation + 1) % fallingShape.sp.childLength; // 循环旋转
