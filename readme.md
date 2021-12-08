@@ -16,9 +16,10 @@
 #### 备注
 1. 如果是其他Arduino版本，需配置LCD屏，按要求连接针脚，可参考[LCD WIKI](http://www.lcdwiki.com/zh/%E9%A6%96%E9%A1%B5#SPI_Display_Module)
 2. 如果使用其他分辨率的LCD屏，可按需修改代码配置，最小要求320*240，过小则会导致显示不全
-2. 按钮连接后，需要修改代码tetris.h中对应的按钮针脚
-3. 增加支持JoyStick Shield，支持NRF2401远程控制，可参考wiki [keyestudio JoyStick Shield](https://wiki.keyestudio.com/Ks0153_keyestudio_JoyStick_Shield)
-4. 受控端[NRF2401引脚](https://nrf24.github.io/RF24/)连线到Wio Terminal背部：
+3. 按钮连接后，需要修改代码tetris.h中对应的按钮针脚
+4. 增加支持JoyStick Shield，支持NRF2401远程控制，可参考wiki [keyestudio JoyStick Shield](https://wiki.keyestudio.com/Ks0153_keyestudio_JoyStick_Shield)
+5. JoyStick Shield控制端代码[https://github.com/oliverCJ/arduino_joystick_shield_rf24](https://github.com/oliverCJ/arduino_joystick_shield_rf24)
+6. 受控端[NRF2401引脚](https://nrf24.github.io/RF24/)连线到Wio Terminal背部：
 
 |  NRF24L01   | BCM | BOARD |
 |  ---- | ---- | ---- |
